@@ -5,7 +5,6 @@
 - 在线阶段下载并固定模型快照
 - 离线阶段只从本地目录加载模型
 - CPU 上执行 `openai/privacy-filter` 的 token-classification 推理
-- 可选尝试 4bit（失败自动回退普通 CPU 加载）
 
 ## 1. 环境准备
 
@@ -59,21 +58,8 @@ models-cache\models--openai--privacy-filter\snapshots\7ffa9a043d54d1be65afb281ed
 - 默认 `local_files_only=True`，不会在线回源
 - 如需允许在线回源（不推荐离线验收时使用），加 `--allow-online`
 
-## 4. 可选 4bit 尝试（非强制）
 
-在无独显和 16GB 内存环境，建议优先保证可运行。
-
-```bash
-uv run python main.py \
-	--model-path ./models-cache/hub/models--openai--privacy-filter/snapshots/<commit_hash> \
-	--text "Contact me at 13800138000" \
-	--offline \
-	--try-4bit
-```
-
-如果当前 CPU/运行时不支持 4bit，会自动打印错误并回退到普通 CPU 加载。
-
-## 5. 官方文档对应关系
+## 4. 官方文档对应关系
 
 - 下载与缓存：`huggingface_hub.snapshot_download`（含 `local_dir`、过滤、`dry_run`）
 - 离线模式：`HF_HUB_OFFLINE=1` + `local_files_only=True`
