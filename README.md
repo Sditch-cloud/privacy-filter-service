@@ -1,10 +1,10 @@
 # privacy-filter-service
 
-基于 Hugging Face 官方下载与离线模式说明的本地推理方案，目标是：
+基于 Hugging Face 官方下载与离线模式说明的本地推理服务，目标是：
 
 - 在线阶段下载并固定模型快照
 - 离线阶段只从本地目录加载模型
-- CPU 上执行 `openai/privacy-filter` 的 token-classification 推理
+- 通过 FastAPI 提供 `openai/privacy-filter` 的 token-classification HTTP 接口
 
 ## 1. 环境准备
 
@@ -21,65 +21,57 @@ uv pip install torch --index-url https://download.pytorch.org/whl/cpu
 uv pip install -e .
 ```
 
-## 2. 在线下载模型（官方 snapshot_download 流程）
+## 2. 启动 FastAPI 服务
 
-先联网执行下载，将模型缓存到本地。
+服务启动时会在 `lifespan` 中执行：
+
+- 下载模型（默认仓库：`openai/privacy-filter`）
+- 初始化全局唯一 pipeline（CPU）
+- 对外提供 `/analyze` 接口
 
 ```bash
-uv run python download_model.py --repo-id openai/privacy-filter --cache-dir ./models-cache
+uv run fastapi dev main.py
 ```
 
-下载完成后会输出 `snapshot_path=...`。离线推理时优先把该路径传给 `--model-path`。
+默认地址为 `http://127.0.0.1:8000`。
 
-常见可选参数：
+可用接口：
 
-- `--revision <branch|tag|commit>` 固定版本
-- `--local-dir ./models/privacy-filter` 以本地目录结构落盘
-- `--allow-pattern` / `--ignore-pattern` 过滤下载文件
-- `--dry-run` 只查看将下载的文件，不实际下载
-- `--mirror <url>`: 可选的镜像/端点地址（例如 https://hf-mirror.com/），用于将下载请求重定向到镜像站点。脚本会尝试在支持的新版本 `huggingface_hub` 中传入 `endpoint` 参数，并设置环境变量 `HF_HUB_URL` / `HF_ENDPOINT` 以兼容旧版本。镜像地址可带或不带尾部 `/`。
+- `GET /`：健康检查示例，返回 `{"Hello": "World"}`
+- `POST /analyze`：文本隐私信息检测
 
-示例：
-
-使用镜像做 dry-run（仅列出将下载的文件）：
+`POST /analyze` 请求示例：
 
 ```bash
-uv run python download_model.py --repo-id google/gemma-4-E4B-it-assistant --mirror https://hf-mirror.com/ --dry-run
+curl -X POST "http://127.0.0.1:8000/analyze" \
+	-H "Content-Type: application/json" \
+	-d '{"text":"My email is alice@example.com and phone is 123-456-7890"}'
 ```
 
-使用镜像执行实际下载：
+返回示例：
 
-```bash
-uv run python download_model.py --repo-id google/gemma-4-E4B-it-assistant --mirror https://hf-mirror.com/ --cache-dir ./models-cache
-```
-
-只下载 openai_privacy_filter 必要的文件
-```bash
-uv run python download_model.py --repo-id openai/privacy-filter --cache-dir ./models-cache --mirror https://hf-mirror.com/ --allow-pattern config.json --allow-pattern tokenizer.json --allow-pattern tokenizer_config.json --allow-pattern model.safetensors --allow-pattern model.sig --allow-pattern viterbi_calibration.json
-```
-
-如果模型受限访问，先设置 token：
-
-```bash
-set HF_TOKEN=your_token_here
-```
-
-## 3. 离线本地 CPU 推理
-
-将 `--model-path` 指向本地 snapshot 路径或 `--local-dir` 输出目录。
-
-```bash
-uv run python main.py --model-path ./models-cache/models--openai--privacy-filter/snapshots/<commit_hash> --text "My name is Alice Smith and my email is alice@example.com" --offline
+```json
+{
+	"predictions": [
+		{
+			"entity_group": "private_email",
+			"score": 0.9998,
+			"word": " alice@example.com",
+			"start": 12,
+			"end": 30
+		}
+	]
+}
 ```
 
 说明：
 
-- `--offline` 会设置 `HF_HUB_OFFLINE=1` 和 `TRANSFORMERS_OFFLINE=1`
-- 默认 `local_files_only=True`，不会在线回源
-- 如需允许在线回源（不推荐离线验收时使用），加 `--allow-online`
+- 当前实现默认按离线方式加载模型（见 `main.py` 启动参数）
+- 模型实例保存在 `app.state.ml_model`，请求复用同一个实例
+- 若模型初始化失败，服务会在启动阶段直接报错
 
 
-## 4. 官方文档对应关系
+## 3. 官方文档对应关系
 
 - 下载与缓存：`huggingface_hub.snapshot_download`（含 `local_dir`、过滤、`dry_run`）
 - 离线模式：`HF_HUB_OFFLINE=1` + `local_files_only=True`
@@ -88,8 +80,3 @@ uv run python main.py --model-path ./models-cache/models--openai--privacy-filter
 
 - https://huggingface.co/docs/huggingface_hub/guides/download
 - https://huggingface.co/docs/transformers/en/installation#offline-mode
-
-## 6. 注意事项
-
-- `openai/privacy-filter` 主仓是基础模型，不等于 INT4 成品；INT4 通常在 Quantizations 子模型里。
-- 该模型用于隐私检测辅助，不等于合规保证；生产场景应保留人工复核。
