@@ -1,6 +1,7 @@
 import argparse
 import os
 from typing import Optional
+import inspect
 
 from huggingface_hub import snapshot_download
 
@@ -47,6 +48,11 @@ def build_parser() -> argparse.ArgumentParser:
 		help="HF token string. If omitted, uses HF_TOKEN env var when available.",
 	)
 	parser.add_argument(
+		"--mirror",
+		default=None,
+		help="Optional mirror/endpoint URL (e.g. https://hf-mirror.com/) to override HF endpoint.",
+	)
+	parser.add_argument(
 		"--dry-run",
 		action="store_true",
 		help="Only show which files would be downloaded.",
@@ -67,6 +73,19 @@ def main() -> None:
 	token = args.token or os.getenv("HF_TOKEN")
 	allow_patterns = _normalize_patterns(args.allow_pattern)
 	ignore_patterns = _normalize_patterns(args.ignore_pattern)
+	# If a mirror/endpoint is provided, try to pass it to snapshot_download
+	# (newer huggingface_hub versions accept an `endpoint` kwarg). Also
+	# export common env vars to help older versions pick up the mirror.
+	endpoint_kwargs = {}
+	if args.mirror:
+		mirror = args.mirror.rstrip('/')
+		# set environment variables that some HF tooling respects
+		os.environ.setdefault("HF_HUB_URL", mirror)
+		os.environ.setdefault("HF_ENDPOINT", mirror)
+		# If snapshot_download accepts `endpoint`, pass it directly.
+		sig = inspect.signature(snapshot_download)
+		if "endpoint" in sig.parameters:
+			endpoint_kwargs["endpoint"] = mirror
 
 	snapshot_path = snapshot_download(
 		repo_id=args.repo_id,
@@ -78,6 +97,7 @@ def main() -> None:
 		ignore_patterns=ignore_patterns,
 		token=token,
 		dry_run=args.dry_run,
+		**endpoint_kwargs,
 	)
 
 	print(f"repo_id={args.repo_id}")

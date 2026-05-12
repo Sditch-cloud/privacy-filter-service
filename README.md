@@ -37,6 +37,23 @@ uv run python download_model.py --repo-id openai/privacy-filter --cache-dir ./mo
 - `--local-dir ./models/privacy-filter` 以本地目录结构落盘
 - `--allow-pattern` / `--ignore-pattern` 过滤下载文件
 - `--dry-run` 只查看将下载的文件，不实际下载
+- `--mirror <url>`: 可选的镜像/端点地址（例如 https://hf-mirror.com/），用于将下载请求重定向到镜像站点。脚本会尝试在支持的新版本 `huggingface_hub` 中传入 `endpoint` 参数，并设置环境变量 `HF_HUB_URL` / `HF_ENDPOINT` 以兼容旧版本。镜像地址可带或不带尾部 `/`。
+
+示例：
+
+使用镜像做 dry-run（仅列出将下载的文件）：
+
+```bash
+uv run python download_model.py --repo-id google/gemma-4-E4B-it-assistant --mirror https://hf-mirror.com/ --dry-run
+```
+
+使用镜像执行实际下载：
+
+```bash
+uv run python download_model.py --repo-id google/gemma-4-E4B-it-assistant --mirror https://hf-mirror.com/ --cache-dir ./models-cache
+```
+
+
 
 如果模型受限访问，先设置 token：
 
@@ -51,7 +68,7 @@ set HF_TOKEN=your_token_here
 ```bash
 uv run python main.py --model-path ./models-cache/models--openai--privacy-filter/snapshots/<commit_hash> --text "My name is Alice Smith and my email is alice@example.com" --offline
 ```
-models-cache\models--openai--privacy-filter\snapshots\7ffa9a043d54d1be65afb281eddf0ffbe629385b
+
 说明：
 
 - `--offline` 会设置 `HF_HUB_OFFLINE=1` 和 `TRANSFORMERS_OFFLINE=1`
