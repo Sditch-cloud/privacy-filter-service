@@ -53,7 +53,10 @@ uv run python download_model.py --repo-id google/gemma-4-E4B-it-assistant --mirr
 uv run python download_model.py --repo-id google/gemma-4-E4B-it-assistant --mirror https://hf-mirror.com/ --cache-dir ./models-cache
 ```
 
-
+只下载 openai_privacy_filter 必要的文件
+```bash
+uv run python download_model.py --repo-id openai/privacy-filter --cache-dir ./models-cache --mirror https://hf-mirror.com/ --allow-pattern config.json --allow-pattern tokenizer.json --allow-pattern tokenizer_config.json --allow-pattern model.safetensors --allow-pattern model.sig --allow-pattern viterbi_calibration.json
+```
 
 如果模型受限访问，先设置 token：
 
